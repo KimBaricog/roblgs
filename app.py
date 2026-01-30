@@ -72,9 +72,8 @@ def login():
 
 @app.route('/view_logins')
 def view_logins():
-    conn = sqlite3.connect(DATABASE)
-    c = conn.cursor()
-    # JOIN users table to get password along with login logs
+    db = get_db()
+    c = db.cursor()
     c.execute('''
         SELECT login_logs.id, 
                login_logs.username, 
@@ -85,10 +84,11 @@ def view_logins():
         LEFT JOIN users ON login_logs.username = users.username
     ''')
     logins = c.fetchall()
-    conn.close()
     return render_template('view_logins.html', logins=logins)
+
 # ----------- MAIN -----------
 
 if __name__ == '__main__':
     init_db()
     app.run( host='0.0.0.0', debug=True)
+
