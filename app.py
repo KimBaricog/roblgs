@@ -1,10 +1,17 @@
 from flask import Flask, render_template, request, redirect, url_for, session, g
 import sqlite3
 from datetime import datetime
+import os
 
 app = Flask(__name__)
 app.secret_key = 'secret123'
-DATABASE = 'users.db'
+
+# ----------- DATABASE CONFIGURATION -----------
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATABASE = os.path.join(BASE_DIR, 'users.db')  # Use absolute path
+
+# If running on AWS Lambda, uncomment this:
+# DATABASE = '/tmp/users.db'
 
 # ----------- DATABASE FUNCTIONS -----------
 
@@ -20,12 +27,13 @@ def close_connection(exception):
         db.close()
 
 def init_db():
+    """Initialize the database with required tables"""
     with app.app_context():
         db = get_db()
         db.execute('''
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT,
+                username TEXT UNIQUE,
                 password TEXT
             )
         ''')
@@ -53,9 +61,20 @@ def login():
         password = request.form['password']
 
         db = get_db()
+        cursor = db.cursor()
 
-        # Save new user
-        db.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, password))
+        # Check if user exists
+        cursor.execute("SELECT * FROM users WHERE username = ? AND password = ?", (username, password))
+        user = cursor.fetchone()
+
+        if not user:
+            # If user does not exist, insert new user
+            try:
+                db.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, password))
+            except sqlite3.IntegrityError:
+                # Username already exists, so login failed
+                error = "Incorrect username or password."
+                return render_template('login.html', error=error)
 
         # Log login attempt
         login_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -64,11 +83,10 @@ def login():
                    (username, login_time, ip))
         db.commit()
 
-        # Show error always
-        error = "Incorrect username or password."
-        return render_template('login.html', error=error)
+        session['username'] = username
+        return redirect(url_for('view_logins'))
 
-    return render_template('login.html')
+    return render_template('login.html', error=error)
 
 @app.route('/view_logins')
 def view_logins():
@@ -90,5 +108,4 @@ def view_logins():
 
 if __name__ == '__main__':
     init_db()
-    app.run( host='0.0.0.0', debug=True)
-
+    app.run(host='0.0.0.0', debug=True)
