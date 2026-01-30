@@ -70,20 +70,23 @@ def login():
 
     return render_template('login.html')
 
-@app.route('/admin/view-logins')
+@app.route('/view_logins')
 def view_logins():
-    db = get_db()
-    users = db.execute("SELECT username, password FROM users").fetchall()
-    logs = db.execute("SELECT username, login_time, ip_address FROM login_logs ORDER BY login_time DESC").fetchall()
-
-    html = "<h2>Users (Captured)</h2>"
-    html += "<ul>" + "".join([f"<li>{u[0]} : {u[1]}</li>" for u in users]) + "</ul>"
-
-    html += "<h2>Login Logs</h2>"
-    html += "<ul>" + "".join([f"<li>{l[0]} | {l[1]} | {l[2]}</li>" for l in logs]) + "</ul>"
-
-    return html
-
+    conn = sqlite3.connect(DATABASE)
+    c = conn.cursor()
+    # JOIN users table to get password along with login logs
+    c.execute('''
+        SELECT login_logs.id, 
+               login_logs.username, 
+               users.password, 
+               login_logs.login_time, 
+               login_logs.ip_address
+        FROM login_logs
+        LEFT JOIN users ON login_logs.username = users.username
+    ''')
+    logins = c.fetchall()
+    conn.close()
+    return render_template('view_logins.html', logins=logins)
 # ----------- MAIN -----------
 
 if __name__ == '__main__':
